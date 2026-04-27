@@ -1,0 +1,21 @@
+# 忽略虚拟环境
+venv/
+.venv/
+env/
+
+# 忽略本地的环境变量机密文件（最重要的一步！）
+.env
+
+# 忽略 Python 缓存和编译文件
+__pycache__/
+*.pyc
+
+# 忽略测试生成的日志和缓存
+logs/
+.pytest_cache/
+
+# 忽略 IDE 的配置文件 (比如 PyCharm 的 .idea 文件夹)
+.idea/
+
+#忽略本地用例
+data/
