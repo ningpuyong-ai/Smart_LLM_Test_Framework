@@ -22,6 +22,10 @@ class SmartConfig:
     JUDGE_BASE_URL = os.getenv("JUDGE_BASE_URL") or LLM_BASE_URL
     JUDGE_MODEL = os.getenv("JUDGE_MODEL") or DEFAULT_MODEL
 
+    # 3. Dify 应用级变量：合法值仅 船员 | 总工 | 船长（必填、无默认值）
+    # 常规回归默认 船长（高权限）；越权/RBAC 用例请在 YAML 显式写 user_role: 船员
+    DEFAULT_USER_ROLE = os.getenv("DEFAULT_USER_ROLE", "船长")
+
     @classmethod
     def get_timeout(cls):
         """动态获取超时时间"""

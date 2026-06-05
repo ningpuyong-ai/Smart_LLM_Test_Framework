@@ -1,6 +1,7 @@
 import pytest
 import os
 from utils.data_loader import load_yaml_data
+from utils.dify_inputs import build_dify_inputs, is_default_role, resolve_user_role
 from utils.logger import log
 
 # 定位并加载我们刚才写的 agent_routing.yml
@@ -23,7 +24,6 @@ def test_agent_dynamic_routing(case_data, llm_client, llm_judge, wiremock_client
     mock_file = case_data.get("mock_file")
     expected_behavior = case_data.get("expected_behavior")
     expected_type = case_data.get("expected_type", "tool_calling")
-    user_role = case_data.get("user_role", "")
 
     if not mock_file:
         pytest.skip("该用例没有配置 mock_file，跳过仿真测试")
@@ -33,11 +33,15 @@ def test_agent_dynamic_routing(case_data, llm_client, llm_judge, wiremock_client
     log.info(f"===> 正在向 WireMock 注入状态仿真文件: {mock_file}")
     wiremock_client.inject_mock(mock_path)
 
-    # 2. 触发 Agent：带上 user_role 变量发给 Dify
+    # 2. 触发 Agent：带上 user_role（未写则 船长；越权场景写 船员）
     test_message = [{"role": "user", "content": prompt_text}]
-    inputs_var = {"user_role": user_role} if user_role else {}
+    inputs_var = build_dify_inputs(case_data)
+    if is_default_role(case_data):
+        log.info(f"===> [{case_data.get('case_id')}] 默认角色: {resolve_user_role(case_data)}")
+    else:
+        log.info(f"===> [{case_data.get('case_id')}] 指定角色: {inputs_var['user_role']}")
 
-    log.info(f"===> 发送 Agent 指令: '{prompt_text}', 环境变量: {inputs_var}")
+    log.info(f"===> 发送 Agent 指令: '{prompt_text}', inputs: {inputs_var}")
     response = llm_client.send_request(test_message, inputs=inputs_var)
 
     assert response != "", "大模型接口返回值为空"

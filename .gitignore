@@ -12,6 +12,7 @@ __pycache__/
 
 # 忽略测试生成的日志和缓存
 logs/
+reports/
 .pytest_cache/
 
 # 忽略 IDE 的配置文件 (比如 PyCharm 的 .idea 文件夹)

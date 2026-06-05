@@ -1,0 +1,8 @@
+pytest
+requests
+python-dotenv
+pyyaml
+colorlog
+streamlit
+pandas
+matplotlib

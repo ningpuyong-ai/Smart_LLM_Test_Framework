@@ -1,6 +1,8 @@
 # 导入pytest，题库加载器
 import pytest
 from utils.data_loader import load_yaml_data
+from utils.dify_inputs import build_dify_inputs, is_default_role, resolve_user_role
+from utils.logger import log
 
 # 核心配置：在这里切换要跑的考试题
 # 方式1：只跑单个文件（比如只跑agent.yml，调试用，省时间）
@@ -33,8 +35,15 @@ def test_dify_base_chat(case_data, llm_client, llm_judge):
     # 把题目包装成标准的对话格式
     test_message = [{"role": "user", "content": prompt_text}]
 
+    # Dify 必填 user_role（船员|总工|船长）：未写则用默认 船长；越权用例显式写 船员
+    inputs_var = build_dify_inputs(case_data)
+    if is_default_role(case_data):
+        log.info(f"[{case_data.get('case_id')}] 未指定 user_role，使用默认角色: {resolve_user_role(case_data)}")
+    else:
+        log.info(f"[{case_data.get('case_id')}] 使用用例指定角色: {inputs_var['user_role']}")
+
     # 第三步：调用发包器，给被测大模型发题，拿到回答
-    response = llm_client.send_request(test_message)
+    response = llm_client.send_request(test_message, inputs=inputs_var)
 
     # 断言1：返回值非空校验，大模型不能返回空内容
     assert response != "", "大模型接口返回值为空"
