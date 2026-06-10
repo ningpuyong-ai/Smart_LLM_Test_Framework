@@ -6,3 +6,4 @@ colorlog
 streamlit
 pandas
 matplotlib
+openpyxl

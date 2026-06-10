@@ -125,6 +125,7 @@ class ReportCollector:
                 {
                     "case_id": c["case_id"],
                     "test_module": c.get("test_module", ""),
+                    "expected_type": c.get("expected_type", "general"),
                     "mock_file": c.get("mock_file", ""),
                     "prompt": c["prompt"],
                     "response": c["response"],

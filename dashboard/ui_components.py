@@ -6,6 +6,10 @@ matplotlib.use("Agg")
 import pandas as pd
 import streamlit as st
 
+from dashboard.chart_fonts import configure_matplotlib_cjk, get_cjk_fontproperties
+
+configure_matplotlib_cjk()
+
 
 def render_kpi_row(kpi: dict) -> None:
     c1, c2, c3, c4 = st.columns(4)
@@ -15,6 +19,79 @@ def render_kpi_row(kpi: dict) -> None:
     c4.metric("通过 / 失败 / 跳过", f"{kpi['passed']} / {kpi['failed']} / {kpi['skipped']}")
 
 
+def render_trust_dimension_dashboard(trust_df: pd.DataFrame) -> None:
+    """工业可信四维 KPI 看板 + 通过率柱状图 / 雷达图。"""
+    st.subheader("工业可信维度")
+    st.caption(
+        "将 10 种 expected_type 聚合为 4 大核心维度，"
+        "通过率 = 维度内 PASS / (PASS + FAIL)。"
+    )
+
+    cols = st.columns(4)
+    for col, (_, row) in zip(cols, trust_df.iterrows()):
+        pct = row["通过率_pct"]
+        if pct is None or row["用例数"] == 0:
+            col.metric(
+                row["维度"],
+                "—",
+                help="当前维度暂无有效评测用例",
+            )
+            continue
+        col.metric(
+            row["维度"],
+            f"{pct}%",
+            f"{row['通过数']}/{row['通过数'] + row['失败数']} 通过",
+        )
+
+    chart_left, chart_right = st.columns(2)
+    with chart_left:
+        _render_trust_dimension_bar(trust_df)
+    with chart_right:
+        _render_trust_dimension_radar(trust_df)
+
+
+def _render_trust_dimension_bar(trust_df: pd.DataFrame) -> None:
+    st.markdown("##### 维度通过率（柱状图）")
+    plot_df = trust_df.dropna(subset=["通过率_pct"])
+    if plot_df.empty:
+        st.info("暂无维度通过率数据。")
+        return
+
+    chart_df = plot_df.set_index("维度")[["通过率_pct"]].rename(columns={"通过率_pct": "通过率 (%)"})
+    st.bar_chart(chart_df, height=360, use_container_width=True)
+
+
+def _render_trust_dimension_radar(trust_df: pd.DataFrame) -> None:
+    st.markdown("##### 维度通过率（雷达图）")
+    plot_df = trust_df.dropna(subset=["通过率_pct"])
+    if plot_df.empty:
+        st.info("暂无维度通过率数据。")
+        return
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    fp = get_cjk_fontproperties()
+    labels = plot_df["维度"].tolist()
+    values = plot_df["通过率_pct"].tolist()
+    angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
+    values_closed = values + [values[0]]
+    angles_closed = angles + [angles[0]]
+
+    fig, ax = plt.subplots(figsize=(5.5, 4.5), subplot_kw={"polar": True})
+    ax.plot(angles_closed, values_closed, color="#3498db", linewidth=2)
+    ax.fill(angles_closed, values_closed, color="#3498db", alpha=0.25)
+    ax.set_xticks(angles)
+    ax.set_xticklabels(labels, fontproperties=fp, fontsize=8)
+    ax.set_ylim(0, 100)
+    ax.set_yticks([20, 40, 60, 80, 100])
+    ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=7)
+    ax.set_title("四维通过率雷达", fontproperties=fp, fontsize=10, pad=20)
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+
+
 def render_score_distribution(dist_df: pd.DataFrame) -> None:
     st.subheader("得分分布")
     if dist_df.empty or dist_df["数量"].sum() == 0:
@@ -22,13 +99,17 @@ def render_score_distribution(dist_df: pd.DataFrame) -> None:
         return
     import matplotlib.pyplot as plt
 
+    fp = get_cjk_fontproperties()
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(dist_df["区间"], dist_df["数量"], color="#3498db")
-    ax.set_xlabel("得分区间")
-    ax.set_ylabel("用例数")
-    plt.xticks(rotation=30, ha="right")
+    x_pos = range(len(dist_df))
+    ax.bar(x_pos, dist_df["数量"], color="#3498db")
+    ax.set_xticks(list(x_pos))
+    ax.set_xticklabels(dist_df["区间"], fontproperties=fp, rotation=30, ha="right")
+    ax.set_xlabel("得分区间", fontproperties=fp)
+    ax.set_ylabel("用例数", fontproperties=fp)
     fig.tight_layout()
     st.pyplot(fig)
+    plt.close(fig)
 
 
 def render_status_pie(status_df: pd.DataFrame) -> None:
@@ -42,6 +123,7 @@ def render_status_pie(status_df: pd.DataFrame) -> None:
 def _build_pie_chart(status_df: pd.DataFrame):
     import matplotlib.pyplot as plt
 
+    configure_matplotlib_cjk()
     color_map = {
         "PASS": "#2ecc71",
         "FAIL": "#e74c3c",

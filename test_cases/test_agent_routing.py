@@ -1,12 +1,12 @@
 import pytest
 import os
-from utils.data_loader import load_yaml_data
+from utils.data_loader import load_agent_routing_cases
 from utils.dify_inputs import build_dify_inputs, is_default_role, resolve_user_role
 from utils.logger import log
 
 # 定位并加载我们刚才写的 agent_routing.yml
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-AGENT_CASES = load_yaml_data("data/agent_routing.yml")
+AGENT_CASES = load_agent_routing_cases("data/agent_routing.yml")
 
 case_ids = [
     f"{case.get('case_id')}_mock:{case.get('mock_file')}"

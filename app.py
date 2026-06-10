@@ -4,96 +4,146 @@ Smart LLM 评测监控大盘 — Streamlit 入口
 """
 import streamlit as st
 
-from dashboard.analytics import (
-    cases_to_dataframe,
-    failed_cases,
-    kpi_from_report,
-    score_distribution,
-    status_distribution,
-)
-from dashboard.report_io import REPORTS_DIR, list_report_files, load_report, report_label
-from dashboard.ui_components import (
-    render_detail_table,
-    render_failed_probe,
-    render_kpi_row,
-    render_score_distribution,
-    render_status_pie,
-)
+from dashboard.case_import_ui import render_case_import_tab
+from dashboard.dashboard_page import render_dashboard_tab
+
+PAGE_DASHBOARD = "历史评测大盘"
+PAGE_IMPORT = "用例管理与导入"
+
+MENU_ITEMS: dict[str, callable] = {
+    PAGE_DASHBOARD: render_dashboard_tab,
+    PAGE_IMPORT: render_case_import_tab,
+}
+
+
+def inject_custom_css() -> None:
+    """侧栏与面包屑样式；可按需调整颜色、字号、间距。"""
+    st.markdown(
+        """
+        <style>
+        /* ── 侧栏容器 ── */
+        section[data-testid="stSidebar"] {
+            background-color: #1e293b;
+            border-right: 1px solid #334155;
+        }
+        section[data-testid="stSidebar"] > div {
+            padding-top: 1.25rem;
+        }
+
+        /* ── 侧栏文字默认色 ── */
+        section[data-testid="stSidebar"] .stMarkdown,
+        section[data-testid="stSidebar"] .stMarkdown p {
+            color: #e2e8f0 !important;
+        }
+
+        /* ── 品牌区 ── */
+        .erp-sidebar-brand {
+            padding: 0.25rem 0.5rem 1.25rem 0.5rem;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 1rem;
+        }
+        .erp-sidebar-brand .brand-title {
+            color: #f8fafc;
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1.4;
+            margin: 0;
+        }
+        .erp-sidebar-brand .brand-sub {
+            color: #cbd5e1;
+            font-size: 0.78rem;
+            margin: 0.15rem 0 0 0;
+        }
+
+        /* ── 导航菜单（radio 伪装为纵向菜单） ── */
+        section[data-testid="stSidebar"] .stRadio > div {
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] {
+            background-color: transparent;
+            border-left: 3px solid transparent;
+            border-radius: 0 6px 6px 0;
+            padding: 0.55rem 0.75rem;
+            margin: 0;
+            width: 100%;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #f1f5f9 !important;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        /* 覆盖 Streamlit radio 内部文字节点 */
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] p,
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] span,
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] div {
+            color: #f1f5f9 !important;
+        }
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"]:hover {
+            background-color: rgba(148, 163, 184, 0.18);
+        }
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"]:has(input:checked) {
+            background-color: rgba(59, 130, 246, 0.35);
+            border-left-color: #60a5fa;
+            color: #ffffff !important;
+            font-weight: 600;
+        }
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"]:has(input:checked) p,
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"]:has(input:checked) span,
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"]:has(input:checked) div {
+            color: #ffffff !important;
+            font-weight: 600;
+        }
+        section[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] > div:first-child {
+            display: none;
+        }
+
+        /* ── 主区面包屑 ── */
+        .erp-breadcrumb {
+            color: #64748b;
+            font-size: 0.82rem;
+            margin-bottom: 0.35rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .erp-breadcrumb .current {
+            color: #334155;
+            font-weight: 600;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 st.set_page_config(
     page_title="Smart LLM 评测监控大盘",
     page_icon="📊",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-st.title("Smart LLM 评测监控大盘")
-st.caption("读取 `reports/` 目录下的 pytest 结构化 JSON 报告，进行多轮历史对比分析。")
-
-report_files = list_report_files()
+inject_custom_css()
 
 with st.sidebar:
-    st.header("历史评测任务")
-    st.caption(f"报告目录: `{REPORTS_DIR}`")
+    st.markdown(
+        """
+        <div class="erp-sidebar-brand">
+            <p class="brand-title">Smart LLM 评测系统</p>
+            <p class="brand-sub">工业 Agent 自动化评测</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    selected_page = st.radio(
+        "导航",
+        list(MENU_ITEMS.keys()),
+        label_visibility="collapsed",
+        key="main_nav",
+    )
 
-    if not report_files:
-        st.warning("暂无报告文件。请先运行 `pytest` 生成 JSON 报告。")
-        st.stop()
-
-    labels = []
-    file_by_label = {}
-    for fname in report_files:
-        data = load_report(fname)
-        if data is None:
-            continue
-        label = report_label(fname, data)
-        labels.append(label)
-        file_by_label[label] = fname
-
-    selected_label = st.selectbox("选择评测任务", labels, index=0)
-    selected_file = file_by_label[selected_label]
-
-report = load_report(selected_file)
-if not report:
-    st.error("报告文件读取失败，请检查 JSON 格式。")
-    st.stop()
-
-st.info(
-    f"当前查看报告：**{report.get('run_id', selected_file)}** "
-    f"（{report.get('start_time', '')} ~ {report.get('end_time', '')}）。"
-    f"若与终端 pytest 不一致，请确认侧边栏选的是**最新一次**运行生成的 JSON，或重新执行 `pytest` 后再刷新页面。"
+st.markdown(
+    f'<div class="erp-breadcrumb">首页 / <span class="current">{selected_page}</span></div>',
+    unsafe_allow_html=True,
 )
 
-df = cases_to_dataframe(report)
-kpi = kpi_from_report(report, df)
-
-render_kpi_row(kpi)
-
-st.divider()
-
-chart_left, chart_right = st.columns(2)
-with chart_left:
-    render_score_distribution(score_distribution(df))
-with chart_right:
-    render_status_pie(status_distribution(df))
-
-st.divider()
-
-with st.expander("失败用例探针（业务复盘）", expanded=bool(len(failed_cases(df)))):
-    render_failed_probe(failed_cases(df))
-
-st.divider()
-render_detail_table(df)
-
-with st.expander("运行元数据"):
-    st.json(
-        {
-            "run_id": report.get("run_id"),
-            "start_time": report.get("start_time"),
-            "end_time": report.get("end_time"),
-            "total_cases": report.get("total_cases"),
-            "passed": report.get("passed"),
-            "failed": report.get("failed"),
-            "skipped": report.get("skipped"),
-            "pass_rate": report.get("pass_rate"),
-        }
-    )
+MENU_ITEMS[selected_page]()

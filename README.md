@@ -55,17 +55,22 @@
 
 ### 5) JSON 报告持久化 + Streamlit 评测监控大盘
 
-每次 `pytest` 运行结束后，框架通过 `utils/report_collector.py` 旁路采集数据，在 `reports/` 目录自动生成 `run_YYYYMMDD_HHMMSS.json`。
+每次 `pytest` 运行结束后，框架通过 `utils/report_collector.py` 旁路采集数据，在 `reports/` 目录自动生成 `run_YYYYMMDD_HHMMSS.json`。每条用例记录包含 `expected_type`，供大盘做工业可信维度聚合。
 
-`app.py` 驱动的 Streamlit 大盘可：
+`app.py` 驱动的 Streamlit 前端采用**经典 ERP 后台布局**：
 
-- 侧边栏切换历史评测任务
-- 展示 KPI（总用例数、通过率、平均分）
-- 渲染得分分布柱状图、状态占比饼图
-- 对失败用例做双栏对比探针（被测回答 vs 裁判原因）
-- 底部 `st.dataframe` 展示完整明细
+- **左侧深色侧栏**：纵向菜单切换页面（`st.sidebar.radio`）
+- **右侧主内容区**：顶部面包屑 + 业务页面
+- **样式可定制**：`app.py` 内 `inject_custom_css()` 集中管理侧栏背景、选中高亮、字体等
 
-报告字段包含 `test_module`、`mock_file`，用于区分同名 `case_id` 在不同测试文件中的执行结果。
+两个功能页面：
+
+| 页面 | 模块 | 能力 |
+|------|------|------|
+| **历史评测大盘** | `dashboard/dashboard_page.py` | 选择历史报告、KPI、工业可信四维分析、得分/状态图表、失败探针、明细表 |
+| **用例管理与导入** | `dashboard/case_import_ui.py` | 下载 Excel 模板、上传校验、预览并落盘 `data/imported_excel_cases.yml` |
+
+报告字段包含 `test_module`、`mock_file`、`expected_type`，用于区分同名 `case_id` 在不同测试文件中的执行结果，以及维度聚合统计。
 
 ### 6) Dify RBAC 角色注入（`user_role`）
 
@@ -102,13 +107,23 @@ Smart_LLM_Test_Framework/
 │  ├─ dify_inputs.py            # Dify user_role 解析与注入
 │  ├─ report_collector.py       # 旁路采集 + JSON 落盘
 │  └─ logger.py                 # 终端彩色日志 + logs/ 文件
-├─ dashboard/                   # Streamlit 数据处理与 UI 组件
-│  ├─ report_io.py
-│  ├─ analytics.py
-│  └─ ui_components.py
+├─ dashboard/                   # Streamlit 数据处理、校验、可视化 UI
+│  ├─ dashboard_page.py         # 历史评测大盘（含工业可信维度）
+│  ├─ case_import_ui.py         # 用例管理与 Excel 导入
+│  ├─ analytics.py              # KPI / 分布 / 四维聚合统计
+│  ├─ ui_components.py          # Streamlit 渲染组件（图表、探针、明细表）
+│  ├─ chart_fonts.py            # Matplotlib 中文字体（雷达图等）
+│  ├─ report_io.py              # reports/ 读取与标签
+│  ├─ case_schema.py             # Excel 字段与 expected_type 枚举
+│  ├─ excel_validator.py
+│  └─ excel_export.py
+├─ templates/
+│  └─ test_cases_template.xlsx  # Excel 用例模板（含下拉校验）
+├─ scripts/
+│  └─ generate_excel_template.py
 ├─ reports/                     # pytest 自动生成的 JSON 报告（gitignore）
 ├─ logs/                        # 运行日志（gitignore）
-├─ app.py                       # Streamlit 评测监控大盘入口
+├─ app.py                       # Streamlit 入口（侧栏导航 + ERP 样式）
 ├─ requirements.txt
 ├─ pytest.ini
 ├─ .env.example                 # 配置模板（可提交 Git）
@@ -126,9 +141,9 @@ Smart_LLM_Test_Framework/
 | 裁判引擎 | OpenAI-Compatible Chat Completions |
 | Mock 沙盒 | WireMock |
 | 数据与配置 | YAML (PyYAML), python-dotenv, colorlog |
-| 报告与可视化 | Streamlit, Pandas, Matplotlib |
+| 报告与可视化 | Streamlit, Pandas, Matplotlib, openpyxl |
 
-**Roadmap（规划中）**：Playwright 端到端 UI 回归、多轮历史趋势对比与告警。
+**Roadmap（规划中）**：Playwright 端到端 UI 回归、多轮历史趋势对比与告警、四维通过率跨版本折线对比。
 
 ---
 
@@ -196,7 +211,20 @@ RBAC 越权用例示例：
   expected_type: rbac_escalation
 ```
 
-支持的 `expected_type` 包括但不限于：`general`、`security`、`factuality`、`roleplay`、`rag_closed_book`、`rag_grounding`、`tool_calling`、`rbac_escalation`。
+支持的 `expected_type`（共 10 种，与 `dashboard/case_schema.py` 及 Excel 模板下拉一致）：
+
+| 枚举值 | 中文说明 |
+|--------|----------|
+| `general` | 通用问答 |
+| `security` | 安全防御 |
+| `factuality` | 事实性/反幻觉 |
+| `definition` | 概念解释 |
+| `classification` | 分类列举 |
+| `roleplay` | 角色扮演 |
+| `rag_closed_book` | RAG 闭卷 |
+| `rag_grounding` | RAG 落地召回 |
+| `tool_calling` | 工具调用/路由 |
+| `rbac_escalation` | RBAC 越权 |
 
 ### 4) 执行评测
 
@@ -223,9 +251,66 @@ pytest test_cases/test_agent_routing.py -vs
 streamlit run app.py
 ```
 
-浏览器打开后，在侧边栏选择**最新一次** `run_id` 对应的报告。若与终端 pytest 结果不一致，请确认选中的是同一次运行生成的 JSON，或重新执行 `pytest` 后刷新页面。
+浏览器打开后，左侧为 **Smart LLM 评测系统** 导航菜单，右侧为当前页面内容。顶部面包屑显示 `首页 / {当前菜单名}`。
+
+#### 页面一：历史评测大盘
+
+1. **选择评测任务**：下拉框列出 `reports/` 下全部 JSON，标签含 `run_id` 与时间范围
+2. **全局 KPI 行**：总用例数、通过率、平均分、通过/失败/跳过
+3. **工业可信维度（四维聚合）**  
+   将 10 种 `expected_type` 聚合为 4 大核心维度，计算各维度通过率（`PASS / (PASS + FAIL)`，SKIP 不计入）：
+
+   | 工业可信维度 | 包含的 expected_type |
+   |--------------|----------------------|
+   | 事实与幻觉 | `factuality`, `rag_closed_book`, `rag_grounding` |
+   | 安全与权限管控 | `security`, `rbac_escalation` |
+   | 指令遵循与意图理解 | `tool_calling`, `roleplay` |
+   | 基础认知与表达 | `general`, `definition`, `classification` |
+
+   展示内容：
+   - 4 列 KPI 卡片（各维度通过率 + 通过数/总数）
+   - **柱状图**（`st.bar_chart`，浏览器渲染，中文标签）
+   - **雷达图**（Matplotlib 极坐标，经 `chart_fonts.py` 加载系统中文字体）
+
+4. **得分分布** / **用例状态占比**：柱状图 + 饼图
+5. **失败用例探针**：双栏对比「被测模型真实回答」与「裁判判定原因」
+6. **原始数据明细**：完整 `cases` 表格 + 运行元数据折叠面板
+
+> 历史 JSON 若缺少 `expected_type` 字段，大盘会通过 `data/*.yml` 的 `case_id` 索引回填；Agent 路由用例默认视为 `tool_calling`。
+
+#### 页面二：用例管理与导入
+
+工作流：**下载标准 Excel 模板 → 填写用例 → 上传校验 → 确认落盘**
+
+1. **下载模板**：`templates/test_cases_template.xlsx`（含 `expected_type` 下拉校验）
+2. **上传校验**：校验列名、必填项、枚举合法性，错误行逐项提示
+3. **预览并落盘**：生成 `data/imported_excel_cases.yml`，供 `pytest test_cases/test_single_turn.py` 自动加载
+
+重新生成 Excel 模板：
+
+```bash
+python scripts/generate_excel_template.py
+```
+
+#### 前端样式定制
+
+侧栏配色、菜单高亮、面包屑等均在 `app.py` 的 `inject_custom_css()` 中维护，可按团队 UI 规范微调，无需改动业务逻辑模块。
 
 ---
+
+## Streamlit 大盘界面结构
+
+```text
+┌─────────────────┬──────────────────────────────────────────┐
+│ Smart LLM       │  首页 / 历史评测大盘                      │
+│ 评测系统        │  ─────────────────────────────────────── │
+│                 │  [全局 KPI：用例数 | 通过率 | 平均分 …]   │
+│ ▌历史评测大盘    │  [工业可信四维 KPI + 柱状图 + 雷达图]     │
+│  用例管理与导入  │  [得分分布]  [状态占比]                   │
+│                 │  [失败探针]  [明细表]                     │
+└─────────────────┴──────────────────────────────────────────┘
+     侧栏导航                    主内容区
+```
 
 ## 评测结果怎么读
 
@@ -256,6 +341,7 @@ streamlit run app.py
     {
       "case_id": "basic_003",
       "test_module": "test_single_turn",
+      "expected_type": "roleplay",
       "mock_file": "",
       "prompt": "...",
       "response": "...",
@@ -268,11 +354,14 @@ streamlit run app.py
 }
 ```
 
-### 用例执行说明
+### 用例执行说明（双链路隔离）
 
-- `test_single_turn.py` 默认扫描 `data/` 目录下**所有** `.yml` 文件。
-- `test_agent_routing.py` 单独加载 `data/agent_routing.yml`，并在执行前注入 WireMock。
-- 部分 Agent 场景会在两个测试中各跑一遍（无 Mock vs 有 Mock），报告通过 `test_module` 与 `mock_file` 区分，**不要仅凭 `case_id` 判断是否为同一次执行**。
+| 测试文件 | 加载规则 | 适用场景 |
+|----------|----------|----------|
+| `test_single_turn.py` | `load_single_turn_cases()`：扫描 `data/*.yml`，**排除** `agent_routing.yml`，**跳过**带 `mock_file` 的条目 | 安全 / 事实 / RAG / 单轮 Agent 等 |
+| `test_agent_routing.py` | `load_agent_routing_cases()`：只读 `data/agent_routing.yml`，且**必须有** `mock_file` | WireMock 仿真 + 工具路由 / 越权 |
+
+**约定**：需要 Mock 的用例只写在 `agent_routing.yml`；其它 yml 不要写 `mock_file`，避免重复执行。
 
 ---
 
@@ -285,7 +374,7 @@ streamlit run app.py
 3. **RAG 闭卷与 grounding**（`rag.yml`）
 4. **Agent 工具路由与 RBAC 越权审计**（`agent*.yml` + WireMock）
 5. **门禁判定**：`pytest` 通过 + 上传 `reports/run_*.json` 归档
-6. **可选**：`streamlit run app.py` 供业务方复盘失败用例
+6. **可选**：`streamlit run app.py` 供业务方复盘失败用例，并按**工业可信四维**向管理层汇报通过率
 
 ---
 
@@ -293,4 +382,4 @@ streamlit run app.py
 
 `Smart_LLM_Test_Framework` 的价值，不在于“又一个测试脚本集合”，而在于为复杂业务建立了一条可工业化复用的 Agent 质量供应链：
 
-**可观测、可裁判、可隔离、可控成本、可门禁上线、可历史复盘。**
+**可观测、可裁判、可隔离、可控成本、可门禁上线、可历史复盘、可四维可信汇报。**

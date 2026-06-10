@@ -1,6 +1,6 @@
 # 导入pytest，题库加载器
 import pytest
-from utils.data_loader import load_yaml_data
+from utils.data_loader import load_single_turn_cases, load_yaml_data
 from utils.dify_inputs import build_dify_inputs, is_default_role, resolve_user_role
 from utils.logger import log
 
@@ -9,8 +9,8 @@ from utils.logger import log
 # PROMPT_LIST = load_yaml_data("data/agent.yml")
 # 方式2：跑多个指定文件
 # PROMPT_LIST = load_yaml_data(["data/agent.yml", "data/security.yml"])
-# 方式3：跑data目录下所有文件（全量回归）
-PROMPT_LIST = load_yaml_data("data/")
+# 方式3：跑 data/ 下所有单轮用例（自动排除 agent_routing.yml 与带 mock_file 的条目）
+PROMPT_LIST = load_single_turn_cases("data/")
 
 # 提取每道题的case_id和题目前10个字符，生成用例ID，跑测试的时候能一眼看到是哪道题
 case_ids = [
